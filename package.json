@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "OS domestique web inspiré de CasaOS : apps Docker, stats système, serveurs Minecraft, Home Assistant",
   "main": "server.js",
+  "license": "MIT",
+  "repository": "github:Lionsvg/House-APP",
   "private": true,
   "scripts": {
     "start": "node server.js"

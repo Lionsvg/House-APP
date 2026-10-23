@@ -142,6 +142,11 @@ depuis nodejs.org et son empreinte SHA-256 est vérifiée avant d'être intégr�
 
 Mot de passe oublié : arrêtez HouseApp, supprimez `config.json` dans le dossier de données, relancez.
 
+## Licence
+
+[MIT](LICENSE) : libre d'utiliser, modifier et redistribuer HouseApp, même commercialement, en conservant la
+mention de copyright. Le logiciel est fourni « tel quel », sans garantie.
+
 ## Structure du code
 
 ```
