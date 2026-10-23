@@ -1,0 +1,18 @@
+{
+  "name": "houseapp",
+  "version": "1.0.0",
+  "description": "OS domestique web inspiré de CasaOS : apps Docker, stats système, serveurs Minecraft, Home Assistant",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.18",
+    "express": "^4.21.2",
+    "systeminformation": "^5.25.11"
+  }
+}

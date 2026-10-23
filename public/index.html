@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HouseApp</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f7d57'/%3E%3Cpath d='M8 15.5 16 9l8 6.5V23a1 1 0 0 1-1 1h-4.5v-5h-5v5H9a1 1 0 0 1-1-1Z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7Z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8Z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  </svg>
+
+  <div id="auth" class="auth hidden">
+    <form id="authForm" class="card auth-card">
+      <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M4 11 12 4.5l8 6.5v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5Z"/></svg></span>HouseApp</div>
+      <p id="authHint" class="muted" style="margin:0 0 6px"></p>
+      <input id="authPw" type="password" placeholder="Mot de passe" autocomplete="current-password" required />
+      <input id="authPw2" type="password" placeholder="Confirmer le mot de passe" class="hidden" autocomplete="new-password" />
+      <button class="btn primary" type="submit" id="authBtn">Connexion</button>
+      <p id="authErr" class="err"></p>
+    </form>
+  </div>
+
+  <div id="main" class="layout hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M4 11 12 4.5l8 6.5v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5Z"/></svg></span>HouseApp</div>
+      <nav id="nav">
+        <a data-view="home" class="active"><svg class="i"><use href="#i-home"/></svg>Accueil</a>
+        <a data-view="store"><svg class="i"><use href="#i-grid"/></svg>Applications</a>
+        <a data-view="minecraft" data-module="minecraft" class="hidden"><svg class="i"><use href="#i-cube"/></svg>Minecraft</a>
+        <a data-view="house"><svg class="i"><use href="#i-bulb"/></svg>Maison</a>
+        <a data-view="settings"><svg class="i"><use href="#i-gear"/></svg>Paramètres</a>
+      </nav>
+      <div class="side-foot"><b id="clock"></b><span class="host" id="hostname"></span></div>
+    </aside>
+
+    <main class="content">
+      <div id="dockerWarn" class="banner hidden"></div>
+
+      <section id="view-home" class="view">
+        <div class="page-head"><h2>Vue d'ensemble</h2></div>
+        <div class="stats">
+          <div class="card stat" id="w-cpu"><div class="label">Processeur</div></div>
+          <div class="card stat" id="w-ram"><div class="label">Mémoire</div></div>
+          <div class="card stat" id="w-gpu"><div class="label">Carte graphique</div></div>
+          <div class="card stat" id="w-net"><div class="label">Réseau</div></div>
+        </div>
+        <div class="section-head"><h3>Stockage</h3></div>
+        <div class="card disks" id="w-disks"><span class="muted">Mesure en cours…</span></div>
+        <div class="section-head">
+          <h3>Mes applications</h3>
+          <button class="btn sm" data-goto="store"><svg class="i"><use href="#i-plus"/></svg>Ajouter</button>
+        </div>
+        <div id="appGrid" class="app-grid"></div>
+      </section>
+
+      <section id="view-store" class="view hidden">
+        <div class="page-head"><h2>Applications <span id="storeCount" class="muted small"></span></h2></div>
+
+        <div class="card import-box" id="importBox">
+          <svg class="i" style="width:28px;height:28px;color:var(--muted)"><use href="#i-upload"/></svg>
+          <div class="txt"><b>Importer une application depuis votre PC</b>
+            <span class="muted small">Un dossier ou un .zip contenant <code>import.json</code> et un dossier <code>Projet</code> (projet C# ou Dockerfile). Vous pouvez aussi le glisser ici.</span></div>
+          <div class="row-actions">
+            <button class="btn" id="importFolderBtn"><svg class="i"><use href="#i-folder"/></svg>Dossier</button>
+            <button class="btn" id="importZipBtn"><svg class="i"><use href="#i-upload"/></svg>Fichier .zip</button>
+          </div>
+          <input type="file" id="importFolder" webkitdirectory directory multiple class="hidden" />
+          <input type="file" id="importZip" accept=".zip,application/zip" class="hidden" />
+        </div>
+        <div id="localSection" class="hidden">
+          <div class="section-head"><h3>Mes applications importées</h3></div>
+          <div id="localGrid" class="store-grid"></div>
+          <div class="section-head"><h3>Catalogue</h3></div>
+        </div>
+
+        <div class="toolbar"><input id="storeSearch" class="search" placeholder="Rechercher…" /></div>
+        <div id="storeCats" class="chips"></div>
+        <div id="storeGrid" class="store-grid"></div>
+      </section>
+
+      <section id="view-minecraft" class="view hidden"></section>
+
+      <section id="view-house" class="view hidden">
+        <div class="page-head">
+          <h2>Maison</h2>
+          <div class="actions">
+            <button class="btn" id="haRefresh"><svg class="i"><use href="#i-refresh"/></svg>Actualiser</button>
+            <button class="btn" id="haSetup">Connexion</button>
+          </div>
+        </div>
+        <div id="haBody"></div>
+      </section>
+
+      <section id="view-settings" class="view hidden">
+        <div class="page-head"><h2>Paramètres</h2></div>
+        <div class="settings-grid">
+          <div class="card"><h3>Système</h3><div id="sysInfo"></div></div>
+          <div class="card"><h3>Accès à distance</h3><div id="accessInfo"></div></div>
+          <div class="card">
+            <h3>Apparence</h3>
+            <div class="seg" id="themeSeg">
+              <button data-theme="auto">Système</button><button data-theme="light">Clair</button><button data-theme="dark">Sombre</button>
+            </div>
+          </div>
+          <form class="card" id="pwForm">
+            <h3>Mot de passe</h3>
+            <input type="password" name="current" placeholder="Mot de passe actuel" required />
+            <input type="password" name="password" placeholder="Nouveau mot de passe (6 caractères min.)" required />
+            <div class="modal-actions" style="justify-content:flex-start;margin-top:10px"><button class="btn primary">Enregistrer</button></div>
+            <p class="err" id="pwMsg"></p>
+          </form>
+          <div class="card"><h3>Session</h3><button class="btn danger" id="logout">Se déconnecter</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="card modal-card">
+      <button class="modal-close" id="modalClose" aria-label="Fermer"><svg class="i"><use href="#i-x"/></svg></button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+  <script src="minecraft.js"></script>
+</body>
+</html>

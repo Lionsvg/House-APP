@@ -1,0 +1,11 @@
+{
+  "name": "Hello House",
+  "description": "Appli d'exemple en C# : une page web et un compteur de visites sauvegardé.",
+  "version": "1.0.0",
+  "icon": "icon.svg",
+  "port": 8080,
+  "volumes": ["/app/data"],
+  "env": {
+    "GREETING": "Bonjour depuis HouseApp"
+  }
+}
