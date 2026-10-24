@@ -50,12 +50,15 @@ function openModal(html) {
   $('#modal').classList.remove('hidden');
 }
 function closeModal() {
+  if (state.termClose) state.termClose();
   $('#modal').classList.add('hidden');
+  $('#modal .modal-card').classList.remove('wide', 'term-card');
   $('#modalBody').innerHTML = '';
 }
 $('#modalClose').onclick = closeModal;
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+// Echap ferme la fenetre, sauf dans un terminal (vim, nano, ollama run... en ont besoin)
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.target.closest?.('.term')) closeModal(); });
 
 async function followJob(jobId, onDone) {
   openModal(`<h3 id="jobTitle">Tâche en cours…</h3><p id="jobStatus" class="progress-text"></p><div class="joblog" id="jobLog"></div>
@@ -236,12 +239,14 @@ function appMenu(a) {
     <div class="menu-list">
       ${a.web && running ? '<button class="btn primary" data-act="open">Ouvrir</button>' : ''}
       ${running ? '<button class="btn" data-act="stop">Arrêter</button><button class="btn" data-act="restart">Redémarrer</button>' : '<button class="btn primary" data-act="start">Démarrer</button>'}
+      ${running ? `<button class="btn${a.app === 'ollama' ? ' primary' : ''}" data-act="terminal">${a.app === 'ollama' ? 'Terminal Ollama (télécharger des modèles)' : 'Terminal'}</button>` : ''}
       <button class="btn" data-act="logs">Journaux</button>
       <button class="btn danger" data-act="remove">Désinstaller</button>
     </div>`);
   $$('[data-act]', $('#modalBody')).forEach((b) => (b.onclick = async () => {
     const act = b.dataset.act;
     if (act === 'open') return window.open(appUrl(a.web), '_blank', 'noopener');
+    if (act === 'terminal') return openTerminal(a);
     if (act === 'logs') {
       const { logs } = await api('GET', `/api/containers/${a.name}/logs`).catch((e) => ({ logs: e.message }));
       return openModal(`<h3>Journaux — ${esc(a.title)}</h3><div class="joblog" style="max-height:60vh">${esc(logs || '(vide)')}</div>`);
@@ -255,6 +260,105 @@ function appMenu(a) {
       loadInstalled();
     } catch (e) { toast(e.message, true); b.disabled = false; }
   }));
+}
+
+// ---------------------------------------------------------------- terminal d'un conteneur
+const OLLAMA_MODELS = ['qwen3:8b', 'llama3.1:8b', 'gemma3:4b', 'gemma3:12b', 'qwen2.5-coder:7b', 'mistral:7b'];
+const TERM_KEYS = { ctrlc: '\x03', tab: '\t', up: '\x1b[A', down: '\x1b[B', esc: '\x1b' };
+let xtermReady = null;
+
+function loadXterm() {
+  const add = (tag, attrs) => new Promise((resolve, reject) => {
+    const el = Object.assign(document.createElement(tag), attrs, { onload: resolve, onerror: () => reject(new Error(`Chargement de ${attrs.src || attrs.href} impossible`)) });
+    document.head.append(el);
+  });
+  xtermReady ||= add('link', { rel: 'stylesheet', href: '/vendor/xterm/css/xterm.css' })
+    .then(() => add('script', { src: '/vendor/xterm/lib/xterm.js' }))
+    .then(() => add('script', { src: '/vendor/xterm-fit/lib/addon-fit.js' }))
+    .catch((e) => { xtermReady = null; throw e; });
+  return xtermReady;
+}
+
+async function openTerminal(a) {
+  const ollama = a.app === 'ollama';
+  openModal(`<h3>Terminal — ${esc(a.title)}</h3>
+    <p class="muted small">${ollama
+    ? '« Télécharger » continue même si vous fermez cette fenêtre (suivi dans Téléchargements). Dans le terminal : <code>ollama list</code> (modèles installés), <code>ollama rm &lt;modèle&gt;</code> (supprimer), <code>ollama run qwen3:8b</code> (discuter, quitter avec <code>/bye</code>).'
+    : 'Ligne de commande dans le conteneur (comme <code>docker exec</code>). Tapez <code>exit</code> pour la fermer.'}</p>
+    ${ollama ? `<form class="term-pull" id="termPull">
+      <input id="termModel" list="termModels" placeholder="Modèle, ex. qwen3:8b" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <datalist id="termModels">${OLLAMA_MODELS.map((m) => `<option value="${m}">`).join('')}</datalist>
+      <button class="btn primary">Télécharger</button>
+      <button type="button" class="btn" data-cmd="ollama list">Modèles installés</button>
+      <button type="button" class="btn" data-cmd="ollama ps">En mémoire</button>
+    </form><div class="muted small" id="pullState"></div>` : ''}
+    <div class="term" id="term"></div>
+    <div class="term-keys"><button class="btn" data-key="ctrlc">Ctrl+C</button><button class="btn" data-key="tab">Tab</button><button class="btn" data-key="up">↑</button><button class="btn" data-key="down">↓</button><button class="btn" data-key="esc">Échap</button>
+      <span class="muted small" id="termState">Connexion…</span></div>`);
+  $('#modal .modal-card').classList.add('wide', 'term-card');
+  const setState = (t, err) => { const el = $('#termState'); if (el) { el.textContent = t; el.classList.toggle('err', !!err); } };
+
+  try { await loadXterm(); } catch (e) { return setState(e.message, true); }
+  if (!$('#term')) return; // fenetre fermee pendant le chargement
+  const dark = getComputedStyle(document.documentElement).getPropertyValue('--console-bg').trim() || '#111';
+  const term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: "Consolas, 'Cascadia Mono', Menlo, monospace", theme: { background: dark }, scrollback: 5000 });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open($('#term'));
+  try { fit.fit(); } catch { /* fenetre pas encore dimensionnee */ }
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/api/containers/${encodeURIComponent(a.name)}/terminal?cols=${term.cols}&rows=${term.rows}`);
+  ws.binaryType = 'arraybuffer';
+  const enc = new TextEncoder();
+  const send = (txt) => { if (ws.readyState === 1) ws.send(enc.encode(txt)); };
+  let ended = false;
+  ws.onopen = () => { setState('Connecté'); term.focus(); };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== 'string') return term.write(new Uint8Array(ev.data));
+    const m = JSON.parse(ev.data);
+    if (m.type === 'error') { ended = true; setState(m.message, true); term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); }
+    if (m.type === 'exit') { ended = true; setState(`Session terminée${m.code != null ? ` (code ${m.code})` : ''}`); }
+  };
+  ws.onclose = () => { if (!ended) setState('Connexion fermée (session expirée ou conteneur arrêté)', true); };
+  term.onData(send);
+  term.onResize(({ cols, rows }) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols, rows })); });
+  const onWin = () => { try { fit.fit(); } catch { /* ignore */ } };
+  window.addEventListener('resize', onWin);
+  state.termClose = () => { state.termClose = null; window.removeEventListener('resize', onWin); ws.close(); term.dispose(); };
+
+  $$('[data-key]', $('#modalBody')).forEach((b) => (b.onclick = () => { send(TERM_KEYS[b.dataset.key]); term.focus(); }));
+  $$('[data-cmd]', $('#modalBody')).forEach((b) => (b.onclick = () => { send(`${b.dataset.cmd}\r`); term.focus(); }));
+  if ($('#termPull')) {
+    $('#termPull').onsubmit = async (e) => {
+      e.preventDefault();
+      const model = $('#termModel').value.trim();
+      try {
+        const { job } = await api('POST', `/api/containers/${encodeURIComponent(a.name)}/ollama/pull`, { model });
+        $('#termModel').value = '';
+        api('GET', '/api/jobs').then(updateJobsBadge).catch(() => {});
+        watchPull(job);
+      } catch (err) { toast(err.message, true); }
+    };
+  }
+}
+
+/** Avancement du telechargement d'un modele, sous le formulaire (tant que la fenetre est ouverte). */
+async function watchPull(jobId) {
+  const el = $('#pullState');
+  if (!el) return;
+  el.dataset.job = jobId;
+  while (el.isConnected && el.dataset.job === jobId) {
+    let j = null;
+    try { j = await api('GET', `/api/jobs/${jobId}`); } catch { return; }
+    if (!el.isConnected) return;
+    const last = j.log[j.log.length - 1] || '';
+    el.classList.toggle('err', j.status === 'error');
+    el.innerHTML = j.status === 'running' ? `${esc(j.title)} — ${esc(last)}`
+      : j.status === 'done' ? `<span class="ok-text">${esc(last)}</span>` : `Échec : ${esc(j.error)}`;
+    if (j.status !== 'running') { api('GET', '/api/jobs').then(updateJobsBadge).catch(() => {}); return; }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
 }
 
 function confirmRemove(a) {
@@ -539,7 +643,7 @@ $('#pwForm').onsubmit = async (e) => {
 $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); showAuth(); };
 
 // ---------------------------------------------------------------- Telechargements (taches)
-const JOB_KIND = { app: 'Application', import: 'Import', minecraft: 'Minecraft', update: 'Mise à jour' };
+const JOB_KIND = { app: 'Application', import: 'Import', minecraft: 'Minecraft', update: 'Mise à jour', model: 'Modèle IA' };
 const fmtWhen = (t) => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const fmtDur = (ms) => (ms < 60000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
 

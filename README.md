@@ -1,7 +1,8 @@
 # HouseApp
 
 Serveur domestique pilotable depuis un navigateur, inspiré de CasaOS : vue d'ensemble CPU / RAM / GPU / disques /
-réseau, catalogue de **107 applications** Docker, onglet **Téléchargements** (suivi et journaux des installations), **import de vos propres applications** (C# ou Dockerfile),
+réseau, catalogue de **107 applications** Docker, onglet **Téléchargements** (suivi et journaux des installations), **terminal** dans chaque application,
+**import de vos propres applications** (C# ou Dockerfile),
 **panel Minecraft** complet et page **Maison** reliée à Home Assistant.
 
 Fonctionne sous **Windows 10/11** et **Linux** (x64 et arm64, ex : Raspberry Pi 4/5). Seul **Docker** est requis :
@@ -111,6 +112,21 @@ Le pare-feu n'est pas modifié par l'interface : sous Linux `sudo ufw allow <por
 Si Tailscale se connecte après HouseApp au démarrage, son adresse est ajoutée automatiquement.
 Les adresses s'affichent dans **Paramètres → Accès à distance**.
 
+## Terminal et modèles IA (Ollama)
+
+Dans la fiche d'une application en marche (clic sur son icône), **Terminal** ouvre une vraie ligne de commande
+dans son conteneur, directement dans le navigateur (comme `docker exec -it`, sans SSH ni `sudo`). Fermer la
+fenêtre arrête ce qui y tournait. Les boutons Ctrl+C, Tab, ↑ ↓ et Échap aident sur téléphone.
+
+Pour **Ollama**, la fiche propose **Terminal Ollama** : tapez un nom de modèle (ex. `qwen3:8b`) puis
+**Télécharger**. Le téléchargement tourne en tâche de fond (suivi dans **Téléchargements**), même si vous
+fermez la page. Dans le terminal : `ollama list`, `ollama rm <modèle>`, `ollama run <modèle>` (quitter : `/bye`).
+Liste des modèles : https://ollama.com/library. Ordre de grandeur de la mémoire nécessaire (version Q4 par
+défaut) : ~0,6 Go par milliard de paramètres, plus 1 à 2 Go ; un modèle 8B demande donc ~6 Go de RAM.
+
+Derrière un proxy HTTPS (nom de domaine), le proxy doit laisser passer les **WebSockets** pour le terminal
+(Nginx Proxy Manager : option « Websockets Support »).
+
 ## Panel Minecraft
 
 Le panel est une application à installer : **Applications → Panel Minecraft**. Un onglet « Minecraft » apparaît alors.
@@ -198,6 +214,8 @@ scripts/setup.ps1      installation Windows (lancée par Setup.bat)
 scripts/update.ps1     mise à jour Windows (lancée par Update.bat ou par l'interface)
 lib/updater.js         bouton « Mettre à jour » de l'interface
 lib/apps.js            installation des applications, historique des tâches (Téléchargements)
+lib/terminal.js        terminal des conteneurs (API Docker, TTY) ; lib/ws.js : WebSocket minimal
+lib/ollama.js          téléchargement des modèles Ollama en tâche de fond
 install.sh             installation Linux
 update.sh              mise à jour Linux (seuls les fichiers modifiés sont remplacés)
 ```

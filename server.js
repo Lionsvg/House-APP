@@ -14,6 +14,8 @@ const local = require('./lib/localapps');
 const config = require('./lib/config');
 const updater = require('./lib/updater');
 const upnp = require('./lib/upnp');
+const terminal = require('./lib/terminal');
+const ollama = require('./lib/ollama');
 
 const DATA = process.env.HOUSEAPP_DATA ? path.resolve(process.env.HOUSEAPP_DATA) : path.join(__dirname, 'data');
 fs.mkdirSync(DATA, { recursive: true });
@@ -72,6 +74,8 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules', '@xterm', 'xterm')));
+app.use('/vendor/xterm-fit', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit')));
 
 const h = (fn) => (req, res) => Promise.resolve().then(() => fn(req, res)).then((r) => { if (!res.headersSent) res.json(r ?? { ok: true }); })
   .catch((e) => { if (!res.headersSent) res.status(e.status || 400).json({ error: e.message }); });
@@ -137,6 +141,7 @@ app.delete('/api/modules/:id', h(async (req) => {
 }));
 app.post('/api/containers/:name/:verb(start|stop|restart)', h((req) => D.action(req.params.name, req.params.verb)));
 app.get('/api/containers/:name/logs', h(async (req) => ({ logs: await D.logs(req.params.name, 300) })));
+app.post('/api/containers/:name/ollama/pull', h(async (req) => ({ job: (await ollama.pull(req.params.name, req.body.model)).id })));
 app.delete('/api/containers/:name', h((req) => apps.uninstall(req.params.name, req.query.data === '1')));
 app.get('/api/jobs', h(() => apps.listJobs()));
 app.delete('/api/jobs', h(() => apps.clearJobs()));
@@ -298,6 +303,18 @@ const HOSTS = [];
 const servers = new Map();
 const wantsTailscale = () => accessSettings().hostSetting.split(',').map((s) => s.trim()).includes('tailscale');
 
+// Terminal des conteneurs (WebSocket) : session obligatoire, et seulement depuis la page HouseApp elle-meme
+// (une autre page web ne doit pas pouvoir ouvrir un terminal avec votre session).
+function onUpgrade(req, socket, head) {
+  const url = new URL(req.url, 'http://x');
+  const m = url.pathname.match(/^\/api\/containers\/([\w.-]+)\/terminal$/);
+  let sameOrigin = false;
+  try { sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch { /* pas d'Origin */ }
+  if (!m) return socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
+  if (!isLogged(req) || !sameOrigin) return socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+  terminal.handle(req, socket, head, m[1], url.searchParams).catch(() => socket.destroy());
+}
+
 function bind(host, fatal) {
   return new Promise((resolve) => {
     const srv = app.listen(PORT, host, () => { HOSTS.push(host); servers.set(host, srv); resolve(true); }).on('error', (e) => {
@@ -305,6 +322,7 @@ function bind(host, fatal) {
       if (fatal) process.exit(1);
       resolve(false);
     });
+    srv.on('upgrade', onUpgrade);
   });
 }
 

@@ -8,7 +8,7 @@ pas de binaire caché.
 
 | Paquet | Contenu |
 |---|---|
-| `HouseApp-windows-x64.zip` | Le code de HouseApp (JavaScript lisible), ses 3 dépendances npm (`express`, `systeminformation`, `adm-zip`) et `node.exe` |
+| `HouseApp-windows-x64.zip` | Le code de HouseApp (JavaScript lisible), ses dépendances npm (`express`, `systeminformation`, `adm-zip`, et `@xterm/xterm` + `@xterm/addon-fit` pour l'affichage du terminal) et `node.exe` |
 | `HouseApp-linux-*.tar.gz` | Pareil, avec le binaire `node` pour Linux |
 | `HouseApp-source.zip` | Uniquement le code source |
 
@@ -129,6 +129,19 @@ corrompu est refusé sans rien modifier. Seuls les fichiers du programme changen
   (UPnP) : HouseApp parle en HTTP, le mot de passe circulerait donc en clair. Pour un accès depuis Internet,
   préférez Tailscale ou un nom de domaine derrière un proxy HTTPS. Un changement qui couperait l'adresse que vous
   utilisez demande une confirmation.
+
+## Terminal des applications
+
+Le bouton **Terminal** donne une ligne de commande **dans le conteneur** de l'application, avec les droits de ce
+conteneur (souvent root *dans le conteneur*, pas sur la machine). Pour une application à qui HouseApp donne
+la socket Docker (voir « Applications avec des droits étendus »), cela revient à contrôler la machine : c'est le
+même niveau d'accès que l'installation d'applications, réservé à la personne qui a le mot de passe.
+
+- HouseApp parle à la socket Docker (celle qu'utilise déjà la commande `docker`) pour créer un vrai terminal.
+- La connexion (WebSocket) exige une session valide **et** doit venir de la page HouseApp elle-même (en-tête
+  `Origin`) : une autre page web ouverte dans votre navigateur ne peut pas ouvrir de terminal.
+- Seuls les conteneurs installés par HouseApp sont accessibles (étiquette `houseapp=1`), 8 terminaux au plus.
+- À la fermeture de la fenêtre, tous les processus lancés depuis ce terminal sont arrêtés.
 
 ## Signaler un problème
 
