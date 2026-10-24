@@ -1,4 +1,4 @@
-﻿<#
+<#
   HouseApp - mise a jour sous Windows.
   Telecharge le paquet de la nouvelle version, verifie son empreinte SHA-256, puis ne remplace
   QUE les fichiers qui ont change. Le dossier data\ et config.bat ne sont jamais touches.
