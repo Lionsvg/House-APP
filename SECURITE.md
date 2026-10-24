@@ -54,7 +54,9 @@ seulement si vous en avez besoin :
 ## Applications importées depuis votre PC
 
 Le dossier ou le `.zip` envoyé est vérifié ([`lib/localapps.js`](lib/localapps.js)) : les chemins contenant `..`
-ou absolus sont refusés. Les fichiers sont rangés dans `data/local-apps/<id>`. Le projet est ensuite **compilé dans
+ou absolus sont refusés. Pour un `.zip` : les liens symboliques sont ignorés, les fichiers en double
+refusés, et le contenu est limité à 20 000 fichiers et 2 Go une fois décompressé (protection contre les « bombes »
+zip) ; les fichiers sont écrits sans droits spéciaux (pas de SUID). Les fichiers sont rangés dans `data/local-apps/<id>`. Le projet est ensuite **compilé dans
 un conteneur** (`docker build`, images officielles Microsoft `mcr.microsoft.com/dotnet/sdk` et `aspnet`) puis lancé
 dans un conteneur. Votre code n'est jamais exécuté directement sur le système hôte.
 
