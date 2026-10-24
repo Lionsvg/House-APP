@@ -68,6 +68,30 @@ sudo bash /opt/houseapp/install.sh --uninstall
 
 Les données sont dans `/var/lib/houseapp` ; relancer `install.sh` met HouseApp à jour sans les toucher.
 
+## Mettre à jour
+
+La commande de mise à jour télécharge le paquet de la dernière version, vérifie son empreinte SHA-256, puis
+**ne remplace que les fichiers qui ont changé** (et supprime ceux qui n'existent plus). Vos données, votre
+configuration et vos applications ne sont jamais touchées. HouseApp est arrêté le temps de la copie puis redémarré.
+
+**Linux** (installation dans `/opt/houseapp`) :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Lionsvg/House-APP/main/update.sh | sudo bash
+```
+
+Ou, à partir de la 1.0.1 : `sudo bash /opt/houseapp/update.sh` (`--check` pour seulement vérifier,
+`--version 1.0.1` pour une version précise, `--force` pour tout revérifier).
+
+**Windows** : double-cliquez sur **`Update.bat`** dans le dossier HouseApp (à partir de la 1.0.1).
+Depuis une 1.0.0, ou en ligne de commande, ouvrez PowerShell **dans le dossier HouseApp** :
+
+```powershell
+irm https://raw.githubusercontent.com/Lionsvg/House-APP/main/scripts/update.ps1 | iex
+```
+
+Le dossier `data\` et `config.bat` sont conservés.
+
 ## Modes d'accès
 
 | Mode | Écoute sur | Usage |
@@ -164,5 +188,7 @@ lib/config.js          configuration
 public/                interface (HTML/CSS/JS sans build)
 scripts/build.js       fabrication des paquets Windows / Linux / source
 scripts/setup.ps1      installation Windows (lancée par Setup.bat)
+scripts/update.ps1     mise à jour Windows (lancée par Update.bat)
 install.sh             installation Linux
+update.sh              mise à jour Linux (seuls les fichiers modifiés sont remplacés)
 ```

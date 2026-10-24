@@ -11,8 +11,8 @@ const NODE_MAJOR = 'v22';
 const pkg = require(path.join(ROOT, 'package.json'));
 
 const APP_FILES = ['server.js', 'package.json', 'package-lock.json', 'README.md', 'SECURITE.md', 'PROMPT.md', 'LICENSE', 'lib', 'public', 'skills', 'exemples'];
-const WINDOWS_FILES = ['Setup.bat', 'start.bat', 'scripts/setup.ps1'];
-const LINUX_FILES = ['install.sh'];
+const WINDOWS_FILES = ['Setup.bat', 'start.bat', 'Update.bat', 'scripts/setup.ps1', 'scripts/update.ps1'];
+const LINUX_FILES = ['install.sh', 'update.sh'];
 const SOURCE_FILES = [...APP_FILES, ...WINDOWS_FILES, ...LINUX_FILES, 'Package.bat', 'scripts/build.js', '.gitignore'];
 const SKIP = /(^|[\\/])(bin|obj|\.vs|\.git)([\\/]|$)/;
 
@@ -143,7 +143,7 @@ async function buildLinux(rel, arch) {
   const file = `node-${rel.version}-linux-${arch}.tar.gz`;
   const entries = tarEntries(zlib.gunzipSync(await nodeArchive(rel, file)));
   const pick = (p) => entries.find((e) => e.name === `node-${rel.version}-linux-${arch}/${p}`).data;
-  const files = appFiles(LINUX_FILES).map((f) => ({ name: `houseapp/${f.rel}`, data: f.data, mode: f.rel === 'install.sh' ? 0o755 : 0o644 }));
+  const files = appFiles(LINUX_FILES).map((f) => ({ name: `houseapp/${f.rel}`, data: f.data, mode: /^(install|update)\.sh$/.test(f.rel) ? 0o755 : 0o644 }));
   files.push({ name: 'houseapp/node/bin/node', data: pick('bin/node'), mode: 0o755 });
   files.push({ name: 'houseapp/node/LICENSE', data: pick('LICENSE'), mode: 0o644 });
   const out = path.join(DIST, `HouseApp-linux-${arch}.tar.gz`);

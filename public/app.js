@@ -103,7 +103,9 @@ async function showAuth() {
   $('#authPw').focus();
 }
 
-function go(view) {
+function go(view, push = true) {
+  // Historique du navigateur : le bouton / geste "retour" du telephone revient a l'ecran precedent
+  if (push && history.state?.view !== view) history.pushState({ view }, '', `#${view}`);
   state.view = view;
   $$('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${view}`));
@@ -112,7 +114,22 @@ function go(view) {
   Promise.resolve(({ home: loadInstalled, store: renderStore, minecraft: loadMinecraft, house: loadHouse, settings: loadSettings })[view]?.())
     .catch((e) => toast(`Erreur de chargement : ${e.message}`, true));
 }
-$$('#nav a').forEach((a) => (a.onclick = () => go(a.dataset.view)));
+$$('#nav a').forEach((a) => (a.onclick = (e) => { e.preventDefault(); go(a.dataset.view); }));
+window.addEventListener('popstate', (e) => {
+  // "Retour" avec une fenetre ouverte : on la ferme et on reste sur l'ecran actuel
+  if (!$('#modal').classList.contains('hidden')) {
+    closeModal();
+    history.pushState({ view: state.view }, '', `#${state.view}`);
+    return;
+  }
+  if ($('#main').classList.contains('hidden')) return;
+  const v = e.state?.view || location.hash.slice(1);
+  if (v && v !== state.view && $(`#nav a[data-view="${v}"]:not(.hidden)`)) go(v, false);
+});
+// Retour dans l'app (telephone deverrouille, onglet reaffiche) : donnees a jour tout de suite
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.view === 'home' && !$('#main').classList.contains('hidden')) refreshLive();
+});
 document.addEventListener('click', (e) => { const g = e.target.closest('[data-goto]'); if (g) go(g.dataset.goto); });
 
 function tickClock() {
@@ -540,7 +557,11 @@ async function start() {
   } catch { }
   await refreshModules();
   startLive();
-  go('home');
+  // Rouvre l'ecran de l'adresse (#store, #house...) : utile apres un rechargement
+  const first = location.hash.slice(1);
+  const view = first && $(`#nav a[data-view="${first}"]:not(.hidden)`) ? first : 'home';
+  history.replaceState({ view }, '', `#${view}`);
+  go(view, false);
 }
 
 api('GET', '/api/auth/status').then((st) => (st.logged ? start() : showAuth())).catch(() => showAuth());

@@ -2,8 +2,18 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>HouseApp</title>
+  <!-- Telephone : "Ajouter a l'ecran d'accueil" ouvre HouseApp en plein ecran, comme une app -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="HouseApp" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#17181a" media="(prefers-color-scheme: dark)" />
+  <meta name="format-detection" content="telephone=no" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f7d57'/%3E%3Cpath d='M8 15.5 16 9l8 6.5V23a1 1 0 0 1-1 1h-4.5v-5h-5v5H9a1 1 0 0 1-1-1Z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
   <script>
@@ -40,11 +50,11 @@
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M4 11 12 4.5l8 6.5v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5Z"/></svg></span>HouseApp</div>
       <nav id="nav">
-        <a data-view="home" class="active"><svg class="i"><use href="#i-home"/></svg>Accueil</a>
-        <a data-view="store"><svg class="i"><use href="#i-grid"/></svg>Applications</a>
-        <a data-view="minecraft" data-module="minecraft" class="hidden"><svg class="i"><use href="#i-cube"/></svg>Minecraft</a>
-        <a data-view="house"><svg class="i"><use href="#i-bulb"/></svg>Maison</a>
-        <a data-view="settings"><svg class="i"><use href="#i-gear"/></svg>Paramètres</a>
+        <a data-view="home" class="active" href="#home"><svg class="i"><use href="#i-home"/></svg><span>Accueil</span></a>
+        <a data-view="store" href="#store"><svg class="i"><use href="#i-grid"/></svg><span>Applications</span></a>
+        <a data-view="minecraft" data-module="minecraft" class="hidden" href="#minecraft"><svg class="i"><use href="#i-cube"/></svg><span>Minecraft</span></a>
+        <a data-view="house" href="#house"><svg class="i"><use href="#i-bulb"/></svg><span>Maison</span></a>
+        <a data-view="settings" href="#settings"><svg class="i"><use href="#i-gear"/></svg><span>Paramètres</span></a>
       </nav>
       <div class="side-foot"><b id="clock"></b><span class="host" id="hostname"></span></div>
     </aside>
