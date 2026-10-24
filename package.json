@@ -1,6 +1,6 @@
 {
   "name": "houseapp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "OS domestique web inspiré de CasaOS : apps Docker, stats système, serveurs Minecraft, Home Assistant",
   "main": "server.js",
   "license": "MIT",

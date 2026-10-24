@@ -12,14 +12,32 @@ const ha = require('./lib/homeassistant');
 const network = require('./lib/network');
 const local = require('./lib/localapps');
 const config = require('./lib/config');
+const updater = require('./lib/updater');
+const upnp = require('./lib/upnp');
 
-const PORT = Number(process.env.PORT) || 8800;
-const HOST = process.env.HOST || '0.0.0.0';
 const DATA = process.env.HOUSEAPP_DATA ? path.resolve(process.env.HOUSEAPP_DATA) : path.join(__dirname, 'data');
 fs.mkdirSync(DATA, { recursive: true });
 config.init(DATA);
 mc.init(DATA);
 local.init(DATA);
+apps.initJobs(DATA);
+updater.init(DATA);
+
+// Acces (Parametres -> Acces) : le reglage de l'interface (config.json) l'emporte sur HOST / PORT
+// (config.bat sous Windows, /etc/houseapp.env sous Linux).
+const MODES = { local: '127.0.0.1', tailscale: '127.0.0.1,tailscale', lan: '0.0.0.0', internet: '0.0.0.0' };
+const ENV_PORT = Number(process.env.PORT) || 8800;
+const ENV_HOST = process.env.HOST || '0.0.0.0';
+function accessSettings() {
+  const a = config.load().access || {};
+  const mode = MODES[a.mode] ? a.mode : null;
+  return {
+    mode, port: Number(a.port) || ENV_PORT, domain: a.domain || '', https: !!a.https,
+    hostSetting: mode ? MODES[mode] : ENV_HOST,
+    envMode: Object.keys(MODES).find((m) => m !== 'internet' && MODES[m] === ENV_HOST) || 'custom',
+  };
+}
+let PORT = accessSettings().port;
 
 const SESSION_MS = 7 * 24 * 3600 * 1000;
 const sign = (exp, secret) => crypto.createHmac('sha256', secret).update(String(exp)).digest('hex');
@@ -101,7 +119,8 @@ app.get('/api/system/info', h(async () => ({
   ...(await system.getStatic()),
   docker: await D.available(),
   modules: config.load().modules || {},
-  access: { port: PORT, hosts: HOSTS, ...network.addresses(), magicDns: await network.magicDns() },
+  access: { port: PORT, hosts: HOSTS, ...network.addresses(), magicDns: await network.magicDns(), domain: accessSettings().domain, https: accessSettings().https },
+  version: updater.CURRENT,
 })));
 app.get('/api/system/live', h(() => system.getLive()));
 
@@ -119,6 +138,8 @@ app.delete('/api/modules/:id', h(async (req) => {
 app.post('/api/containers/:name/:verb(start|stop|restart)', h((req) => D.action(req.params.name, req.params.verb)));
 app.get('/api/containers/:name/logs', h(async (req) => ({ logs: await D.logs(req.params.name, 300) })));
 app.delete('/api/containers/:name', h((req) => apps.uninstall(req.params.name, req.query.data === '1')));
+app.get('/api/jobs', h(() => apps.listJobs()));
+app.delete('/api/jobs', h(() => apps.clearJobs()));
 app.get('/api/jobs/:id', h((req) => {
   const j = apps.getJob(req.params.id);
   if (!j) throw new Error('Tâche inconnue');
@@ -224,14 +245,62 @@ app.post('/api/ha/config', h(async (req) => {
 app.get('/api/ha/states', h(() => ha.states(config.load().ha)));
 app.post('/api/ha/toggle', h((req) => ha.toggle(config.load().ha, String(req.body.entity_id || ''))));
 
+// ---------------------------------------------------------------- mise a jour
+app.get('/api/update', h(() => updater.status()));
+app.get('/api/update/check', h(() => updater.check()));
+app.post('/api/update', h(() => ({ job: updater.start().id })));
+
+// ---------------------------------------------------------------- acces / exposition
+const localAddr = (req) => String(req.socket.localAddress || '').replace(/^::ffff:/, '');
+let upnpState = null;
+
+app.get('/api/access', h(async (req) => {
+  const a = accessSettings();
+  return {
+    mode: a.mode || a.envMode, fromEnv: !a.mode, port: PORT, domain: a.domain, https: a.https, hosts: HOSTS,
+    ...network.addresses(), magicDns: await network.magicDns(), via: localAddr(req), upnp: upnpState,
+  };
+}));
+app.get('/api/access/public', h(async () => {
+  const out = { publicIp: null, router: null, nat: null, error: null };
+  try { Object.assign(out, await upnp.status()); out.publicIp = out.externalIp; } catch (e) { out.error = e.message; }
+  if (!out.publicIp || upnp.isPrivate(out.publicIp)) out.publicIp = await upnp.publicIpFromInternet().catch(() => out.publicIp);
+  return out;
+}));
+app.put('/api/access', h(async (req) => {
+  const b = req.body || {};
+  const mode = String(b.mode || '');
+  if (!MODES[mode]) throw new Error('Mode inconnu');
+  const port = Number(b.port || PORT);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Port invalide (1024 à 65535)');
+  const domain = String(b.domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (domain && !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) throw new Error('Nom de domaine invalide (ex : maison.exemple.fr)');
+  // Anti-verrouillage : le nouveau reglage doit encore servir l'adresse par laquelle on est connecte.
+  const next = network.resolveHosts(MODES[mode]);
+  const via = localAddr(req);
+  const stillReachable = port === PORT && (next.includes('0.0.0.0') || next.includes(via));
+  if (!stillReachable && !b.confirm) {
+    const e = new Error(port !== PORT
+      ? `HouseApp passera sur le port ${port} : il faudra rouvrir la page à la nouvelle adresse.`
+      : `Vous êtes connecté via ${via} : avec ce mode, cette adresse ne répondra plus. Vous ne pourrez revenir qu'avec une adresse encore autorisée.`);
+    e.status = 409;
+    throw e;
+  }
+  const before = accessSettings();
+  config.update((c) => { c.access = { mode, port, domain, https: !!b.https }; });
+  setTimeout(() => applyAccess(before).catch((err) => console.error(`Changement d'accès : ${err.message}`)), 400);
+  return { ok: true, port, reachable: stillReachable };
+}));
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Route inconnue' }));
 
 const HOSTS = [];
-const WANTS_TAILSCALE = String(HOST).split(',').map((s) => s.trim()).includes('tailscale');
+const servers = new Map();
+const wantsTailscale = () => accessSettings().hostSetting.split(',').map((s) => s.trim()).includes('tailscale');
 
 function bind(host, fatal) {
   return new Promise((resolve) => {
-    app.listen(PORT, host, () => { HOSTS.push(host); resolve(true); }).on('error', (e) => {
+    const srv = app.listen(PORT, host, () => { HOSTS.push(host); servers.set(host, srv); resolve(true); }).on('error', (e) => {
       console.error(`Impossible d'écouter sur ${host}:${PORT} — ${e.message}`);
       if (fatal) process.exit(1);
       resolve(false);
@@ -239,8 +308,37 @@ function bind(host, fatal) {
   });
 }
 
+/** Ouvre le port sur la box (UPnP) en mode Internet, le referme sinon. */
+async function syncUpnp(previous) {
+  const a = accessSettings();
+  if (previous && previous.mode === 'internet' && (a.mode !== 'internet' || previous.port !== a.port)) {
+    await upnp.close(previous.port).catch(() => {});
+    upnpState = null;
+  }
+  if (a.mode !== 'internet') return;
+  try {
+    const r = await upnp.open(a.port, 'HouseApp');
+    upnpState = { ok: true, port: a.port, router: r.router, at: Date.now() };
+    console.log(`  Internet  : port ${a.port} ouvert sur la box (${r.router})`);
+  } catch (e) {
+    upnpState = { ok: false, port: a.port, error: e.message, at: Date.now() };
+    console.log(`  Internet  : ouverture automatique du port impossible (${e.message}) — ouvrez le port ${a.port} sur la box`);
+  }
+}
+
+/** Applique un nouveau reglage d'acces sans redemarrer : on ferme les ecoutes puis on les rouvre. */
+async function applyAccess(previous) {
+  await Promise.all([...servers.values()].map((srv) => new Promise((r) => { srv.close(() => r()); srv.closeAllConnections?.(); })));
+  servers.clear();
+  HOSTS.length = 0;
+  PORT = accessSettings().port;
+  for (const host of network.resolveHosts(accessSettings().hostSetting)) await bind(host, false);
+  console.log(`Accès modifié : écoute sur ${HOSTS.join(', ') || 'aucune adresse'}, port ${PORT}`);
+  await syncUpnp(previous);
+}
+
 (async () => {
-  for (const host of network.resolveHosts(HOST)) await bind(host, true);
+  for (const host of network.resolveHosts(accessSettings().hostSetting)) await bind(host, true);
   console.log(`HouseApp démarré (écoute sur ${HOSTS.join(', ') || 'aucune adresse pour l\'instant'}, port ${PORT})`);
   const { lan, tailscale } = network.addresses();
   const all = HOSTS.includes('0.0.0.0');
@@ -252,12 +350,16 @@ function bind(host, fatal) {
     const dns = await network.magicDns();
     if (dns) console.log(`  Tailscale : http://${dns}:${PORT}`);
   }
-  if (WANTS_TAILSCALE && !ts.length) console.log('  Tailscale : pas encore connecté — HouseApp l\'ajoutera dès qu\'il le sera');
+  if (wantsTailscale() && !ts.length) console.log('  Tailscale : pas encore connecté — HouseApp l\'ajoutera dès qu\'il le sera');
+  if (accessSettings().domain) console.log(`  Domaine   : ${accessSettings().https ? 'https' : 'http'}://${accessSettings().domain}${accessSettings().https ? '' : `:${PORT}`}`);
+  syncUpnp(null);
+  setInterval(() => { if (accessSettings().mode === 'internet') syncUpnp(null); }, 24 * 3600 * 1000).unref();
   D.available().then((d) => console.log(d.ok ? `Docker ${d.version} détecté` : `ATTENTION : Docker indisponible — ${d.error}`));
   if (config.moduleEnabled('minecraft')) mc.renewUpnp();
 
-  if (WANTS_TAILSCALE) {
+  {
     setInterval(async () => {
+      if (!wantsTailscale()) return;
       for (const ip of network.addresses().tailscale) {
         if (!HOSTS.includes(ip) && (await bind(ip, false))) console.log(`Tailscale connecté : http://${ip}:${PORT}`);
       }

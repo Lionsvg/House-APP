@@ -111,7 +111,7 @@ function go(view, push = true) {
   $$('.view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${view}`));
   if (view !== 'minecraft') closeMcConsoles();
   window.scrollTo(0, 0);
-  Promise.resolve(({ home: loadInstalled, store: renderStore, minecraft: loadMinecraft, house: loadHouse, settings: loadSettings })[view]?.())
+  Promise.resolve(({ home: loadInstalled, store: renderStore, downloads: loadDownloads, minecraft: loadMinecraft, house: loadHouse, settings: loadSettings })[view]?.())
     .catch((e) => toast(`Erreur de chargement : ${e.message}`, true));
 }
 $$('#nav a').forEach((a) => (a.onclick = (e) => { e.preventDefault(); go(a.dataset.view); }));
@@ -514,15 +514,8 @@ async function loadSettings() {
     <span>GPU</span><span>${esc((i.gpus || []).map((g) => g.name).join(', ') || 'aucun')}</span>
     <span>Docker</span><span>${i.docker?.ok ? esc(i.docker.version) : '<span class="err">indisponible</span>'}</span></div>`;
 
-  const a = i.access || {};
-  const all = (a.hosts || []).includes('0.0.0.0');
-  const link = (host) => { const u = `http://${host}:${a.port}`; return `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`; };
-  const ts = (a.tailscale || []).filter((ip) => all || a.hosts.includes(ip));
-  $('#accessInfo').innerHTML = `<div class="kv">
-    <span>Écoute sur</span><span>${esc((a.hosts || []).join(', '))}</span>
-    <span>Tailscale</span><span>${ts.length ? [...(a.magicDns ? [a.magicDns] : []), ...ts].map(link).join('<br>') : '<span class="muted">non actif</span>'}</span>
-    ${all ? `<span>Réseau local</span><span>${(a.lan || []).map(link).join('<br>') || '—'}</span>` : ''}</div>
-    <p class="muted small" style="margin-bottom:0">Les applications s'ouvrent avec l'adresse utilisée pour accéder à HouseApp.</p>`;
+  loadAccess(i).catch((e) => { $('#accessInfo').innerHTML = `<span class="err">${esc(e.message)}</span>`; });
+  loadUpdate();
   renderThemeSeg();
 }
 
@@ -544,6 +537,171 @@ $('#pwForm').onsubmit = async (e) => {
   catch (err) { $('#pwMsg').textContent = err.message; }
 };
 $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); showAuth(); };
+
+// ---------------------------------------------------------------- Telechargements (taches)
+const JOB_KIND = { app: 'Application', import: 'Import', minecraft: 'Minecraft', update: 'Mise à jour' };
+const fmtWhen = (t) => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const fmtDur = (ms) => (ms < 60000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`);
+
+async function loadDownloads() {
+  const list = await api('GET', '/api/jobs');
+  updateJobsBadge(list);
+  const box = $('#jobsList');
+  if (!list.length) { box.innerHTML = '<div class="card empty">Rien pour l\'instant. Les installations et mises à jour apparaîtront ici.</div>'; return; }
+  box.innerHTML = list.map((j) => {
+    const state = j.status === 'running' ? 'En cours' : j.status === 'done' ? 'Terminé' : 'Échec';
+    const dur = j.ended ? ` · ${fmtDur(j.ended - j.started)}` : '';
+    const sub = j.status === 'error' && j.error ? j.error : j.last;
+    return `<div class="card job ${esc(j.status)}" data-job="${esc(j.id)}">
+      <span class="st" title="${state}"></span><span class="t">${esc(j.title)}</span><span class="when">${esc(fmtWhen(j.started))}</span>
+      <span class="sub">${esc(JOB_KIND[j.kind] || 'Tâche')} · ${state}${dur}${sub ? ` — ${esc(sub)}` : ''}</span></div>`;
+  }).join('');
+  $$('.job', box).forEach((el) => (el.onclick = () => followJob(el.dataset.job, () => loadDownloads())));
+}
+
+function updateJobsBadge(list) {
+  const n = list.filter((j) => j.status === 'running').length;
+  const b = $('#jobsBadge');
+  b.textContent = n;
+  b.classList.toggle('hidden', !n);
+}
+$('#jobsClear').onclick = async () => { try { await api('DELETE', '/api/jobs'); loadDownloads(); } catch (e) { toast(e.message, true); } };
+setInterval(() => {
+  if (document.hidden || $('#main').classList.contains('hidden')) return;
+  if (state.view === 'downloads' && $('#modal').classList.contains('hidden')) loadDownloads().catch(() => {});
+  else api('GET', '/api/jobs').then(updateJobsBadge).catch(() => {});
+}, 3000);
+
+// ---------------------------------------------------------------- Mise a jour de HouseApp
+async function loadUpdate() {
+  const box = $('#updateInfo');
+  let st;
+  try { st = await api('GET', '/api/update'); } catch (e) { box.innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  box.innerHTML = `<div class="kv"><span>Version installée</span><span><b>${esc(st.current)}</b></span>
+    <span>Dernière version</span><span id="updLatest" class="muted">recherche…</span></div>
+    <div class="update-row" id="updActions"></div>
+    ${st.ok ? '' : `<p class="muted small">${esc(st.reason)}</p>`}`;
+  let c = null;
+  try { c = await api('GET', '/api/update/check'); } catch (e) { $('#updLatest').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  if (c) {
+    $('#updLatest').innerHTML = c.available
+      ? `<b class="ok-text">${esc(c.latest)} disponible</b> · <a href="${esc(c.url)}" target="_blank" rel="noopener">nouveautés</a>`
+      : `${esc(c.latest)} <span class="ok-text">· à jour</span>`;
+  }
+  const actions = $('#updActions');
+  actions.innerHTML = `<button class="btn" id="updCheck">Vérifier</button>`
+    + (c && c.available && st.ok ? `<button class="btn primary" id="updGo">Mettre à jour vers ${esc(c.latest)}</button>` : '')
+    + (st.running ? '<span class="muted small">Mise à jour en cours…</span>' : '');
+  $('#updCheck').onclick = loadUpdate;
+  if ($('#updGo')) $('#updGo').onclick = () => confirmUpdate(c.latest);
+}
+
+function confirmUpdate(version) {
+  openModal(`<h3>Mettre à jour vers ${esc(version)} ?</h3>
+    <p class="muted">Seuls les fichiers modifiés sont remplacés ; vos applications, données et réglages sont conservés.
+    HouseApp redémarre pendant environ une minute : la page se reconnectera toute seule.</p>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn primary" id="updRun">Mettre à jour</button></div>`);
+  $('#updRun').onclick = async () => {
+    try { const r = await api('POST', '/api/update'); watchUpdate(r.job); } catch (e) { toast(e.message, true); closeModal(); }
+  };
+}
+
+/** Suit la mise a jour, y compris pendant le redemarrage de HouseApp (le serveur ne repond plus un moment). */
+async function watchUpdate(jobId) {
+  openModal(`<h3>Mise à jour de HouseApp</h3><p id="jobStatus" class="progress-text">Démarrage…</p><div class="joblog" id="jobLog"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Fermer</button></div>`);
+  const deadline = Date.now() + 15 * 60 * 1000;
+  let wasDown = false;
+  while (Date.now() < deadline && $('#jobLog')) {
+    try {
+      const j = await api('GET', `/api/jobs/${jobId}`);
+      $('#jobLog').textContent = j.log.join('\n');
+      $('#jobLog').scrollTop = $('#jobLog').scrollHeight;
+      if (j.status === 'done') {
+        const v = await api('GET', '/api/update').catch(() => ({}));
+        $('#jobStatus').innerHTML = `<span class="ok-text">Terminé : HouseApp ${esc(v.current || '')}.</span> La page va se recharger.`;
+        setTimeout(() => location.reload(), 2500);
+        return;
+      }
+      if (j.status === 'error') { $('#jobStatus').innerHTML = `<span class="err">Échec : ${esc(j.error)}</span>`; return; }
+      $('#jobStatus').textContent = wasDown ? 'HouseApp a redémarré, fin de la mise à jour…' : 'Téléchargement et vérification…';
+    } catch (e) {
+      if (/Session expirée/.test(e.message)) return;
+      wasDown = true;
+      if ($('#jobStatus')) $('#jobStatus').textContent = 'HouseApp redémarre… (reconnexion automatique)';
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+// ---------------------------------------------------------------- Acces / exposition
+async function loadAccess(info) {
+  const a = await api('GET', '/api/access');
+  const f = $('#accessForm');
+  const all = a.hosts.includes('0.0.0.0');
+  const scheme = a.https ? 'https' : 'http';
+  const link = (host, withPort = true) => { const u = `http://${host}${withPort ? `:${a.port}` : ''}`; return `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`; };
+  const ts = (a.tailscale || []).filter((ip) => all || a.hosts.includes(ip));
+  const domainUrl = a.domain ? `${scheme}://${a.domain}${a.https ? '' : `:${a.port}`}` : '';
+  $('#accessInfo').innerHTML = `<div class="kv">
+    <span>Écoute sur</span><span>${esc(a.hosts.join(', ') || 'aucune adresse')} · port ${a.port}</span>
+    <span>Ce PC</span><span>${link('localhost')}</span>
+    <span>Tailscale</span><span>${ts.length ? [...(a.magicDns ? [a.magicDns] : []), ...ts].map((h) => link(h)).join('<br>') : '<span class="muted">non actif</span>'}</span>
+    ${all ? `<span>Réseau local</span><span>${(a.lan || []).map((h) => link(h)).join('<br>') || '—'}</span>` : ''}
+    ${domainUrl ? `<span>Domaine</span><span><a href="${esc(domainUrl)}" target="_blank" rel="noopener">${esc(domainUrl)}</a></span>` : ''}
+    </div>${a.fromEnv ? '<p class="muted small">Réglage actuel : celui de l\'installation. Le modifier ici l\'enregistre dans HouseApp.</p>' : ''}`;
+  const radio = $(`input[name="mode"][value="${a.mode}"]`, f);
+  if (radio) radio.checked = true;
+  $('#accessPort').value = a.port;
+  $('#accessDomain').value = a.domain || '';
+  $('#accessHttps').checked = !!a.https;
+  $('#accessMsg').textContent = '';
+  const showInternet = () => {
+    const box = $('#internetInfo');
+    const internet = $('input[name="mode"]:checked', f)?.value === 'internet';
+    box.classList.toggle('hidden', !internet);
+    if (!internet) return;
+    box.className = 'note bad';
+    box.innerHTML = `<b>Exposé sur Internet.</b> Sans proxy HTTPS, le mot de passe circule en clair : pour un accès depuis Internet,
+      préférez Tailscale, ou un nom de domaine derrière <b>Nginx Proxy Manager</b> (catalogue) avec un certificat HTTPS.
+      ${a.upnp ? `<br>Box : ${a.upnp.ok ? `port ${a.upnp.port} ouvert automatiquement (${esc(a.upnp.router)})` : `ouverture automatique impossible (${esc(a.upnp.error)}) — ouvrez le port ${a.upnp.port} vers ce PC dans l'interface de la box`}` : ''}
+      <br><span id="publicIp" class="muted">Recherche de l'adresse publique…</span>`;
+    api('GET', '/api/access/public').then((p) => {
+      const el = $('#publicIp');
+      if (!el) return;
+      const port = $('#accessPort').value;
+      el.innerHTML = p.publicIp
+        ? `Adresse publique : <b>${esc(p.publicIp)}</b> → <code>http://${esc(p.publicIp)}:${esc(port)}</code>${p.nat === 'cgnat' ? '<br><span class="err">Votre box est derrière un CGNAT : l\'accès depuis Internet ne fonctionnera pas sans Tailscale ou un tunnel.</span>' : ''}`
+          + (a.domain ? `<br>Pour le domaine : créez un enregistrement DNS <code>A ${esc(a.domain)} → ${esc(p.publicIp)}</code>.` : '')
+        : `Adresse publique introuvable${p.error ? ` (${esc(p.error)})` : ''}.`;
+    }).catch(() => {});
+  };
+  $$('input[name="mode"]', f).forEach((r) => (r.onchange = showInternet));
+  showInternet();
+  f.onsubmit = (e) => { e.preventDefault(); saveAccess(false); };
+}
+
+async function saveAccess(confirmed) {
+  const f = $('#accessForm');
+  const body = {
+    mode: $('input[name="mode"]:checked', f)?.value, port: Number($('#accessPort').value),
+    domain: $('#accessDomain').value.trim(), https: $('#accessHttps').checked, confirm: confirmed,
+  };
+  $('#accessMsg').textContent = '';
+  const res = await fetch('/api/access', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 409) {
+    openModal(`<h3>Confirmer le changement d'accès</h3><p>${esc(data.error)}</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">Annuler</button><button class="btn danger" id="accGo">Appliquer quand même</button></div>`);
+    $('#accGo').onclick = () => { closeModal(); saveAccess(true); };
+    return;
+  }
+  if (!res.ok) { $('#accessMsg').textContent = data.error || `Erreur ${res.status}`; return; }
+  toast('Accès modifié');
+  if (Number(location.port || (location.protocol === 'https:' ? 443 : 80)) !== data.port && location.hostname !== (body.domain || '-')) {
+    setTimeout(() => { location.href = `${location.protocol}//${location.hostname}:${data.port}/#settings`; }, 1500);
+  } else setTimeout(() => loadSettings(), 1200);
+}
 
 async function start() {
   $('#auth').classList.add('hidden');

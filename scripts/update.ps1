@@ -12,7 +12,9 @@ param(
   [string]$Version = '',
   [switch]$Check,
   [switch]$Force,
-  [string]$From = ''   # tests : URL locale contenant les paquets, a la place de GitHub
+  [string]$From = '',  # tests : URL locale contenant les paquets, a la place de GitHub
+  [switch]$Silent,     # relance HouseApp sans ouvrir le navigateur (mise a jour lancee depuis l'interface)
+  [string]$LogFile = '' # copie des messages dans ce fichier (lu par l'interface)
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest est tres lent avec la barre de progression
@@ -21,9 +23,10 @@ $Repo = 'Lionsvg/House-APP'
 $Manifest = '.houseapp-files'
 $Protected = '^(data/|config\.bat$)'      # jamais ecrases ni supprimes
 
-function Info($m) { Write-Host "  $m" }
-function Ok($m) { Write-Host "  [OK] $m" -ForegroundColor Green }
-function Warn($m) { Write-Host "  [!]  $m" -ForegroundColor Yellow }
+function Out-Log($m) { if ($LogFile) { try { Add-Content -LiteralPath $LogFile -Value $m -Encoding UTF8 } catch { } } }
+function Info($m) { Write-Host "  $m"; Out-Log "  $m" }
+function Ok($m) { Write-Host "  [OK] $m" -ForegroundColor Green; Out-Log "  [OK] $m" }
+function Warn($m) { Write-Host "  [!]  $m" -ForegroundColor Yellow; Out-Log "  [!]  $m" }
 function Die($m) { throw $m }   # pas de "exit" : avec "irm | iex" il fermerait la fenetre PowerShell
 
 try {
@@ -33,6 +36,7 @@ if (-not $Dir) {
   else { $Dir = (Get-Location).Path }
 }
 $Dir = (Resolve-Path $Dir).Path
+if (Test-Path (Join-Path $Dir '.git')) { Die "$Dir est un depot git (installation de developpement) : utilisez git pull" }
 if (-not (Test-Path (Join-Path $Dir 'server.js'))) { Die "HouseApp introuvable dans $Dir (lancez la commande depuis le dossier HouseApp, ou -Dir C:\chemin\HouseApp)" }
 
 $current = (Get-Content (Join-Path $Dir 'package.json') -Raw | ConvertFrom-Json).version
@@ -43,6 +47,7 @@ if (-not $Version) {
 $Version = $Version -replace '^v', ''
 Write-Host ""
 Write-Host "HouseApp : version installee $current, version disponible $Version" -ForegroundColor Cyan
+Out-Log "HouseApp : version installee $current, version disponible $Version"
 if ($current -eq $Version -and -not $Force) { Ok 'Deja a jour'; return }
 if ($Check) { Info 'Une mise a jour est disponible : double-cliquez sur Update.bat'; return }
 
@@ -104,7 +109,8 @@ try {
     if ($list.Count -gt 15) { Info "  ... et $($list.Count - 15) autres" }
   }
   if ($stopped) {   # on ne relance que ce qu'on a arrete (sinon : deux HouseApp sur le meme port)
-    Start-Process -FilePath (Join-Path $Dir 'start.bat') -WorkingDirectory $Dir
+    if ($Silent) { Start-Process -FilePath (Join-Path $Dir 'start.bat') -ArgumentList '/silent' -WorkingDirectory $Dir -WindowStyle Minimized }
+    else { Start-Process -FilePath (Join-Path $Dir 'start.bat') -WorkingDirectory $Dir }
     Ok 'HouseApp redemarre'
   }
   Write-Host ""
@@ -114,5 +120,6 @@ try {
 }
 } catch {
   Write-Host "  [X]  $($_.Exception.Message)" -ForegroundColor Red
+  Out-Log "  [X]  $($_.Exception.Message)"
   if ($PSCommandPath) { exit 1 }
 }

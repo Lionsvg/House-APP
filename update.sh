@@ -11,6 +11,9 @@ MANIFEST=".houseapp-files"
 VERSION=""
 FORCE=0
 FROM=""   # tests : dossier/URL local contenant les paquets, a la place de GitHub
+UNITS_ONLY=0
+DATA_DIR="/var/lib/houseapp"
+[ -f /etc/houseapp.env ] && DATA_DIR="$(sed -n 's/^HOUSEAPP_DATA=//p' /etc/houseapp.env | head -n1)" && [ -n "$DATA_DIR" ] || DATA_DIR="/var/lib/houseapp"
 CHECK=0
 
 if [ -t 1 ]; then B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; N=$'\e[0m'; else B=""; G=""; Y=""; R=""; C=""; N=""; fi
@@ -31,6 +34,7 @@ Options :
   --check           Dire seulement si une mise a jour existe
   --force           Reinstaller meme si la version est deja la bonne
   --dir DOSSIER     Dossier d'installation (defaut : ${PREFIX})
+  --units           Installer seulement le bouton "Mettre a jour" de l'interface (systemd)
 EOF
 }
 
@@ -44,6 +48,7 @@ while [ $# -gt 0 ]; do
     --force) FORCE=1; shift ;;
     --dir) PREFIX="$2"; shift 2 ;;
     --from) FROM="${2%/}"; shift 2 ;;
+    --units) UNITS_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "Option inconnue : $1 (--help)" ;;
   esac
@@ -58,6 +63,36 @@ case "$(uname -m)" in
   *) die "Architecture non prise en charge : $(uname -m)" ;;
 esac
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; }
+[ -d "$PREFIX/.git" ] && die "$PREFIX est un depot git (installation de developpement) : utilisez git pull"
+
+# Bouton "Mettre a jour" de l'interface : HouseApp (sans droits root) depose update.request dans ses
+# donnees ; systemd le voit et lance ce script en root. Seul le script officiel de $PREFIX est execute.
+install_units() {
+  has_systemd || { info "systemd absent : pas de bouton de mise a jour dans l'interface"; return 0; }
+  cat > /etc/systemd/system/houseapp-update.path <<UNIT
+[Unit]
+Description=HouseApp : mise a jour demandee depuis l'interface
+
+[Path]
+PathExists=${DATA_DIR}/update.request
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  cat > /etc/systemd/system/houseapp-update.service <<UNIT
+[Unit]
+Description=HouseApp : mise a jour
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f ${DATA_DIR}/update.request
+ExecStart=/bin/sh -c '${PREFIX}/update.sh > ${DATA_DIR}/update.log 2>&1; chmod 644 ${DATA_DIR}/update.log'
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now houseapp-update.path >/dev/null 2>&1 && ok "Bouton \"Mettre a jour\" de l'interface active" \
+    || warn "Impossible d'activer houseapp-update.path"
+}
+if [ "$UNITS_ONLY" -eq 1 ]; then install_units; exit 0; fi
 
 CURRENT="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$PREFIX/package.json" | head -n1)"
 if [ -z "$VERSION" ]; then
@@ -74,7 +109,8 @@ trap 'rm -rf "$TMP"' EXIT
 BASE="${FROM:-https://github.com/${REPO}/releases/download/v${VERSION}}"
 ASSET="HouseApp-linux-${ARCH}.tar.gz"
 info "Telechargement de $ASSET"
-curl -fL --progress-bar "$BASE/$ASSET" -o "$TMP/$ASSET" || die "Telechargement impossible : $BASE/$ASSET"
+if [ -t 2 ]; then PROGRESS="--progress-bar"; else PROGRESS="-s"; fi
+curl -fL $PROGRESS "$BASE/$ASSET" -o "$TMP/$ASSET" || die "Telechargement impossible : $BASE/$ASSET"
 curl -fsSL "$BASE/SHA256SUMS.txt" -o "$TMP/SHA256SUMS.txt" || die "Empreintes introuvables : $BASE/SHA256SUMS.txt"
 EXPECTED="$(grep " $ASSET\$" "$TMP/SHA256SUMS.txt" | cut -d' ' -f1)"
 GOT="$(sha256sum "$TMP/$ASSET" | cut -d' ' -f1)"
@@ -121,6 +157,7 @@ if has_systemd && { [ "$WAS_ACTIVE" -eq 1 ] || systemctl is-enabled --quiet hous
   sleep 2
   systemctl is-active --quiet houseapp && ok "Service houseapp redemarre" || warn "Le service ne redemarre pas : journalctl -u houseapp -n 50"
 fi
+install_units
 echo
 ok "${B}HouseApp ${CURRENT:-?} -> ${VERSION}${N} (donnees et configuration conservees)"
 }

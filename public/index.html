@@ -33,6 +33,7 @@
     <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8Z"/><path d="M14 3v5h5"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></symbol>
   </svg>
 
   <div id="auth" class="auth hidden">
@@ -52,6 +53,7 @@
       <nav id="nav">
         <a data-view="home" class="active" href="#home"><svg class="i"><use href="#i-home"/></svg><span>Accueil</span></a>
         <a data-view="store" href="#store"><svg class="i"><use href="#i-grid"/></svg><span>Applications</span></a>
+        <a data-view="downloads" href="#downloads"><svg class="i"><use href="#i-download"/></svg><span>Téléchargements</span><b class="badge hidden" id="jobsBadge"></b></a>
         <a data-view="minecraft" data-module="minecraft" class="hidden" href="#minecraft"><svg class="i"><use href="#i-cube"/></svg><span>Minecraft</span></a>
         <a data-view="house" href="#house"><svg class="i"><use href="#i-bulb"/></svg><span>Maison</span></a>
         <a data-view="settings" href="#settings"><svg class="i"><use href="#i-gear"/></svg><span>Paramètres</span></a>
@@ -104,6 +106,15 @@
         <div id="storeGrid" class="store-grid"></div>
       </section>
 
+      <section id="view-downloads" class="view hidden">
+        <div class="page-head">
+          <h2>Téléchargements</h2>
+          <div class="actions"><button class="btn" id="jobsClear">Vider l'historique</button></div>
+        </div>
+        <p class="muted" style="margin-top:-6px">Installations d'applications, imports, serveurs Minecraft et mises à jour : touchez une ligne pour voir son journal.</p>
+        <div id="jobsList" class="jobs"></div>
+      </section>
+
       <section id="view-minecraft" class="view hidden"></section>
 
       <section id="view-house" class="view hidden">
@@ -121,7 +132,25 @@
         <div class="page-head"><h2>Paramètres</h2></div>
         <div class="settings-grid">
           <div class="card"><h3>Système</h3><div id="sysInfo"></div></div>
-          <div class="card"><h3>Accès à distance</h3><div id="accessInfo"></div></div>
+          <div class="card"><h3>Mise à jour</h3><div id="updateInfo"><span class="muted">Vérification…</span></div></div>
+          <form class="card" id="accessForm">
+            <h3>Accès et exposition</h3>
+            <div id="accessInfo"></div>
+            <div class="radio-list" id="accessModes">
+              <label class="radio"><input type="radio" name="mode" value="local"><span><b>Ce PC uniquement</b><small>Seulement depuis la machine du serveur.</small></span></label>
+              <label class="radio"><input type="radio" name="mode" value="tailscale"><span><span class="rt"><b>Ce PC + Tailscale</b> <i class="tag accent">recommandé</i></span><small>Depuis vos appareils Tailscale, invisible sur le Wi-Fi et Internet.</small></span></label>
+              <label class="radio"><input type="radio" name="mode" value="lan"><span><b>Réseau local</b><small>Tout appareil du Wi-Fi / réseau de la maison (et Tailscale).</small></span></label>
+              <label class="radio"><input type="radio" name="mode" value="internet"><span><span class="rt"><b>Internet</b> <i class="tag warn">exposé</i></span><small>Ouvre le port sur la box (UPnP). Joignable par tout le monde : gardez un mot de passe solide.</small></span></label>
+            </div>
+            <div class="row2">
+              <div><label for="accessPort">Port</label><input id="accessPort" name="port" type="number" min="1024" max="65535" inputmode="numeric" /></div>
+              <div><label for="accessDomain">Nom de domaine (optionnel)</label><input id="accessDomain" name="domain" placeholder="maison.exemple.fr" autocapitalize="off" autocorrect="off" spellcheck="false" /></div>
+            </div>
+            <label class="check" style="margin-top:10px"><input type="checkbox" name="https" id="accessHttps"> Le domaine passe par un proxy HTTPS (Nginx Proxy Manager, Caddy…)</label>
+            <div id="internetInfo" class="note hidden"></div>
+            <div class="modal-actions" style="justify-content:flex-start;margin-top:14px"><button class="btn primary">Appliquer</button></div>
+            <p class="err" id="accessMsg"></p>
+          </form>
           <div class="card">
             <h3>Apparence</h3>
             <div class="seg" id="themeSeg">

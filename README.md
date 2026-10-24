@@ -1,7 +1,7 @@
 # HouseApp
 
 Serveur domestique pilotable depuis un navigateur, inspiré de CasaOS : vue d'ensemble CPU / RAM / GPU / disques /
-réseau, catalogue de **80 applications** Docker, **import de vos propres applications** (C# ou Dockerfile),
+réseau, catalogue de **107 applications** Docker, onglet **Téléchargements** (suivi et journaux des installations), **import de vos propres applications** (C# ou Dockerfile),
 **panel Minecraft** complet et page **Maison** reliée à Home Assistant.
 
 Fonctionne sous **Windows 10/11** et **Linux** (x64 et arm64, ex : Raspberry Pi 4/5). Seul **Docker** est requis :
@@ -70,6 +70,9 @@ Les données sont dans `/var/lib/houseapp` ; relancer `install.sh` met HouseApp 
 
 ## Mettre à jour
 
+Le plus simple : **Paramètres → Mise à jour → Mettre à jour**. HouseApp redémarre tout seul (environ une minute).
+Sous Linux, ce bouton est activé par `install.sh` ou par la première mise à jour en ligne de commande ci-dessous.
+
 La commande de mise à jour télécharge le paquet de la dernière version, vérifie son empreinte SHA-256, puis
 **ne remplace que les fichiers qui ont changé** (et supprime ceux qui n'existent plus). Vos données, votre
 configuration et vos applications ne sont jamais touchées. HouseApp est arrêté le temps de la copie puis redémarré.
@@ -93,6 +96,11 @@ irm https://raw.githubusercontent.com/Lionsvg/House-APP/main/scripts/update.ps1 
 Le dossier `data\` et `config.bat` sont conservés.
 
 ## Modes d'accès
+
+Le mode, le port et un **nom de domaine** optionnel se règlent dans **Paramètres → Accès et exposition**, sans
+redémarrer. Le mode **Internet** ouvre aussi le port sur la box (UPnP) : HouseApp parle en HTTP, donc pour un accès
+depuis Internet préférez Tailscale, ou un nom de domaine derrière Nginx Proxy Manager (catalogue) avec HTTPS.
+Le pare-feu n'est pas modifié par l'interface : sous Linux `sudo ufw allow <port>/tcp`, sous Windows relancez `Setup.bat`.
 
 | Mode | Écoute sur | Usage |
 |---|---|---|
@@ -176,7 +184,6 @@ mention de copyright. Le logiciel est fourni « tel quel », sans garantie.
 ```
 server.js              API Express, authentification, démarrage
 lib/docker.js          appels à la CLI docker (execFile, sans shell)
-lib/apps.js            installation des applications et modules
 lib/catalog.js         catalogue
 lib/localapps.js       import et compilation des applications perso
 lib/minecraft.js       panel Minecraft
@@ -188,7 +195,9 @@ lib/config.js          configuration
 public/                interface (HTML/CSS/JS sans build)
 scripts/build.js       fabrication des paquets Windows / Linux / source
 scripts/setup.ps1      installation Windows (lancée par Setup.bat)
-scripts/update.ps1     mise à jour Windows (lancée par Update.bat)
+scripts/update.ps1     mise à jour Windows (lancée par Update.bat ou par l'interface)
+lib/updater.js         bouton « Mettre à jour » de l'interface
+lib/apps.js            installation des applications, historique des tâches (Téléchargements)
 install.sh             installation Linux
 update.sh              mise à jour Linux (seuls les fichiers modifiés sont remplacés)
 ```

@@ -88,6 +88,8 @@ HouseApp n'envoie **aucune télémétrie**. Voici toutes les connexions sortante
 | Votre routeur (UPnP, réseau local) | Onglet « Accès Internet » |
 | `playit.gg` | Seulement si vous configurez le tunnel |
 | Votre Home Assistant | Seulement si vous le connectez |
+| `api.github.com`, `github.com` | Paramètres → Mise à jour (vérifier / télécharger la nouvelle version) |
+| `api.ipify.org` | Paramètres → Accès, mode Internet (affiche votre adresse publique) |
 | `nodejs.org` | Seulement pendant la fabrication des paquets (`scripts/build.js`) |
 
 ## Droits demandés à l'installation
@@ -103,6 +105,19 @@ HouseApp n'envoie **aucune télémétrie**. Voici toutes les connexions sortante
 Point important : l'accès à Docker équivaut à un accès administrateur à la machine. Protégez votre mot de passe
 HouseApp, et gardez le mode d'accès « ce PC + Tailscale » (par défaut) plutôt que d'exposer l'interface sur Internet.
 
+## Mise à jour
+
+La mise à jour (bouton **Paramètres → Mise à jour**, `update.sh`, `Update.bat`) télécharge le paquet de la release
+GitHub et **vérifie son empreinte SHA-256** avec `SHA256SUMS.txt` avant de toucher à quoi que ce soit ; un paquet
+corrompu est refusé sans rien modifier. Seuls les fichiers du programme changent : données et réglages restent.
+
+- **Windows** : HouseApp lance `scripts\update.ps1` avec vos droits habituels (pas d'administrateur).
+- **Linux** : HouseApp tourne sans root et ne peut pas se mettre à jour lui-même. Le bouton dépose un fichier
+  `update.request` dans ses données ; l'unité systemd `houseapp-update.path` le voit et lance
+  `/opt/houseapp/update.sh` **en root**. Le contenu de ce fichier est ignoré : HouseApp peut seulement *demander*
+  la mise à jour officielle, pas choisir ce qui est exécuté (le script et `/opt/houseapp` appartiennent à root).
+  Pour retirer ce bouton : `sudo systemctl disable --now houseapp-update.path`.
+
 ## Protection de l'interface
 
 - Mot de passe haché avec **scrypt** (sel aléatoire), jamais stocké en clair.
@@ -110,6 +125,10 @@ HouseApp, et gardez le mode d'accès « ce PC + Tailscale » (par défaut) plut�
   toutes les autres sessions.
 - Par défaut, l'interface n'écoute que sur `127.0.0.1` et l'adresse Tailscale : elle est invisible sur le Wi-Fi
   et sur Internet.
+- **Paramètres → Accès** permet d'élargir (réseau local, Internet). Le mode Internet ouvre le port sur la box
+  (UPnP) : HouseApp parle en HTTP, le mot de passe circulerait donc en clair. Pour un accès depuis Internet,
+  préférez Tailscale ou un nom de domaine derrière un proxy HTTPS. Un changement qui couperait l'adresse que vous
+  utilisez demande une confirmation.
 
 ## Signaler un problème
 

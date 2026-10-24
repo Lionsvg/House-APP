@@ -258,6 +258,32 @@ a.btn { text-decoration: none; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px; background: var(--text); color: var(--bg); z-index: 60; max-width: 90vw; font-weight: 500; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
 .toast.error { background: var(--bad); color: #fff; }
 
+/* Telechargements / taches */
+.jobs { display: grid; gap: 8px; }
+.job { padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; cursor: pointer; }
+.job:hover { background: var(--surface-2); }
+.job .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .sub { grid-column: 2 / -1; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .when { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.job .st { width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); }
+.job.running .st { background: var(--warn); animation: ha-pulse 1.2s infinite; }
+.job.done .st { background: var(--ok); }
+.job.error .st { background: var(--bad); }
+@keyframes ha-pulse { 50% { opacity: 0.35; } }
+.badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--warn); color: #1b1300; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+.tag.warn { background: var(--bad-soft); color: var(--bad); }
+i.tag { font-style: normal; }
+.radio-list { display: grid; gap: 6px; margin: 12px 0 4px; }
+.radio { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; margin: 0; color: var(--text); font-size: 14px; }
+.radio input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; min-height: 0; }
+.radio > span { display: grid; gap: 1px; }
+.radio .rt { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.radio small { color: var(--muted); font-size: 12px; }
+.radio:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.note { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.note.bad { background: var(--bad-soft); }
+.update-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
 /* Ecrans tactiles (sans survol) : pas d'effet "hover" qui reste colle apres un tap */
 @media (hover: none) {
   .btn:hover { background: var(--surface); }
@@ -294,7 +320,9 @@ a.btn { text-decoration: none; }
     flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; justify-content: center;
     min-height: 52px; padding: 6px 2px; border-radius: 10px; font-size: 11px; font-weight: 500; text-align: center;
   }
+  nav a { position: relative; }
   nav a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  nav a .badge { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; }
   nav a svg.i { width: 22px; height: 22px; }
   nav a.active { background: none; }
   nav a.active svg.i { background: var(--accent-soft); border-radius: 999px; padding: 3px 14px; width: 52px; height: 28px; box-sizing: border-box; }

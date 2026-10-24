@@ -246,6 +246,7 @@ EOF
   systemctl enable --now houseapp >/dev/null
   sleep 2
   systemctl is-active --quiet houseapp && ok "Service houseapp démarré" || warn "Le service ne démarre pas : journalctl -u houseapp -n 50"
+  bash "$PREFIX/update.sh" --units || warn "Bouton de mise à jour de l'interface non installé"
 fi
 
 echo
